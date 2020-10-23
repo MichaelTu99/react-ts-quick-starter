@@ -1,9 +1,17 @@
 const HtmlWebpackPlugin = require('html-webpack-plugin');
+const CopyPlugin = require('copy-webpack-plugin');
+const WebpackBar = require('webpackbar');
+const ForkTsCheckerWebpackPlugin = require('fork-ts-checker-webpack-plugin');
+const HardSourceWebpackPlugin = require('hard-source-webpack-plugin');
+const MiniCssExtractPlugin = require('mini-css-extract-plugin');
+const TerserPlugin = require('terser-webpack-plugin');
+const OptimizeCssAssetsPlugin = require('optimize-css-assets-webpack-plugin');
 const { resolve } = require('path');
 const { isDev, PROJECT_PATH } = require('../constants');
 
 const getCssLoaders = (importLoaders) => [
-  'style-loader',
+  // 在开发环境使用style-loader将css注入html
+  isDev ? 'style-loader' : MiniCssExtractPlugin.loader,
   {
     loader: 'css-loader',
     options: {
@@ -41,6 +49,27 @@ module.exports = {
     filename: `js/[name]${isDev ? '' : '.[fullhash:8]'}.js`,
     path: resolve(PROJECT_PATH, './dist'),
   },
+  // externals: {
+  //   react: 'React',
+  //   'react-dom': 'ReactDOM',
+  // },
+  optimization: {
+    splitChunks: {
+      chunks: 'all',
+      name: false,
+    },
+    minimize: !isDev,
+    minimizer: [
+      !isDev &&
+        new TerserPlugin({
+          extractComments: false,
+          terserOptions: {
+            compress: { pure_funcs: ['console.log'] },
+          },
+        }),
+      !isDev && new OptimizeCssAssetsPlugin(),
+    ].filter(Boolean),
+  },
   resolve: {
     extensions: ['.tsx', '.ts', '.js', '.jsx', '.json'],
     alias: {
@@ -71,7 +100,35 @@ module.exports = {
             useShortDoctype: true,
           },
     }),
-  ],
+    new CopyPlugin({
+      patterns: [
+        {
+          context: resolve(PROJECT_PATH, './public'),
+          from: '*',
+          to: resolve(PROJECT_PATH, './dist'),
+          toType: 'dir',
+        },
+      ],
+    }),
+    new WebpackBar({
+      name: isDev ? '正在启动' : '正在打包',
+      color: '#fa8c16',
+    }),
+    new ForkTsCheckerWebpackPlugin({
+      typescript: {
+        configFile: resolve(PROJECT_PATH, './tsconfig.json'),
+      },
+    }),
+    // 生产环境生产单独css文件
+    !isDev &&
+      new MiniCssExtractPlugin({
+        filename: 'css/[name].[contenthash:8].css',
+        chunkFilename: 'css/[name].[contenthash:8].css',
+        ignoreOrder: false,
+      }),
+    // You don't need this plugin with webpack@5, because webpack@5 support cache out of box https://webpack.js.org/configuration/other-options/#cache
+    // new HardSourceWebpackPlugin(),
+  ].filter(Boolean),
   module: {
     rules: [
       {
